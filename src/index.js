@@ -1,117 +1,92 @@
-const express = require('express');
-const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
+const express = require("express");
+
+const { v4: uuid , validate} = require("uuid");
 
 const app = express();
 
-app.use(cors());
 app.use(express.json());
 
-const users = [];
+const repositories = [];
 
-function checksExistsUserAccount(request, response, next) {
-  const { username } = request.headers;
+app.get("/repositories", (request, response) => {
+  return response.json(repositories);
+});
 
-  const user = users.find((user) => user.username === username);
+app.post("/repositories", (request, response) => {
+  const { title, url, techs } = request.body
 
-  if (!user) {
-    return response.status(404).json({ error: 'User not found' });
-  }
-
-  request.user = user;
-
-  return next();
-}
-
-app.post('/users', (request, response) => {
-  const { name, username } = request.body;
-
-  const userExist = users.find((user) => user.username === username);
-
-  if (userExist) {
-    return response.status(400).json({ error: 'User already exists' });
-  }
-
-  const user = { 
-    id: uuidv4(),
-    name,
-    username,
-    todos: [],
+  const repository = {
+    id: uuid(),
+    title,
+    url,
+    techs,
+    likes: 0
   };
 
-  users.push(user);
+  repositories.push(repository);
 
-  return response.status(201).json(user);
+  return response.status(201).json(repository);
 });
 
-app.get('/todos', checksExistsUserAccount, (request, response) => {
-  const { user } = request;
+app.put("/repositories/:id", (request, response) => {
+  const { id } = request.params;
+  const updatedRepository = request.body;
 
-  return response.status(201).json(user.todos);
+  if (!validate(id)) {
+    return response.status(404).json({ error: 'Id out of patterns' });
+  }
+
+  const repositoryIndex = repositories.findIndex(repository => repository.id === id);
+
+  if (repositoryIndex < 0) {
+    return response.status(404).json({ error: "Repository not found" });
+  }
+
+  const repository = repositories[repositoryIndex];
+  
+  repository.title = updatedRepository.title ?? repository.title;
+  repository.url = updatedRepository.url ?? repository.url;
+  repository.techs = updatedRepository.techs ?? repository.techs;
+ 
+  repositories[repositoryIndex] = repository;
+
+  return response.json(repository);
 });
 
-app.post('/todos', checksExistsUserAccount, (request, response) => {
-  const { user } = request;
-  const { title, deadline } = request.body;
+app.delete("/repositories/:id", (request, response) => {
+  const { id } = request.params;
 
-  const todo = { 
-    id: uuidv4(),
-    title,
-    done: false, 
-    deadline: new Date(deadline),
-    created_at: new Date().toDateString()
+  if (!validate(id)) {
+    return response.status(404).json({ error: 'Id out of patterns' });
   }
 
-  user.todos.push(todo);
+  const repositoryIndex = repositories.findIndex(repository => repository.id === id);
 
-  return response.status(201).json(todo);
+  if (repositoryIndex < 0) {
+    return response.status(404).json({ error: "Repository not found" });
+  }
+
+  const repositoryDeleted = repositories.splice(repositoryIndex, 1);
+
+  return response.status(204).send(repositoryDeleted[0]);
 });
 
-app.put('/todos/:id', checksExistsUserAccount, (request, response) => {
-  const { user, body: { title, deadline }, params: { id } } = request;
+app.post("/repositories/:id/like", (request, response) => {
+  const { id } = request.params;
 
-  const todo = user.todos.find((todo) => todo.id === id);
-
-  if (!todo) {
-    return response.status(404).json({ error: 'Todo not found' });
+  if (!validate(id)) {
+    return response.status(404).json({ error: 'Id out of patterns' });
   }
 
-  if (title) {
-    todo.title = title;
-  }
-  if (deadline) {
-    todo.deadline = new Date(deadline);
-  }
+  const repositoryIndex = repositories.findIndex(repository => repository.id === id);
 
-  return response.status(200).json(todo);
-});
-
-app.patch('/todos/:id/done', checksExistsUserAccount, (request, response) => {
-  const { user, params: { id } } = request;
-
-  const todo = user.todos.find((todo) => todo.id === id);
-
-  if (!todo) {
-    return response.status(404).json({ error: 'Todo not found' });
+  if (repositoryIndex < 0) {
+    return response.status(404).json({ error: "Repository not found" });
   }
 
-  todo.done = true;
+  repositories[repositoryIndex].likes++;
 
-  return response.status(200).json(todo);
-});
-
-app.delete('/todos/:id', checksExistsUserAccount, (request, response) => {
-  const { user, params: { id } } = request;
-
-  const todo = user.todos.find((todo) => todo.id === id);
-
-  if (!todo) {
-    return response.status(404).json({ error: 'Todo not found' });
-  }
-
-  user.todos.splice(todo, 1);
-
-  return response.status(204).json(todo);
+  return response.status(200).json(repositories[repositoryIndex]);
 });
 
 module.exports = app;
